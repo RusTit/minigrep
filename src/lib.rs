@@ -46,5 +46,5 @@ pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
             result.push(line);
         }
     }
-    return result;
+    result
 }
