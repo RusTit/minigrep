@@ -2,6 +2,8 @@ use std::env;
 use std::error::Error;
 use std::fs;
 
+//| My study project for the Rust
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -40,12 +42,16 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
-            return Err("Not enought arguments");
-        }
-        let query = args[1].clone();
-        let filename = args[2].clone();
+    pub fn new(mut args: std::env::Args) -> Result<Config, &'static str> {
+        args.next();
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a query string"),
+        };
+        let filename = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a file name"),
+        };
         let case_sensitive = env::var("CASE_INSENSITIVE").is_err();
         Ok(Config {
             query,
@@ -71,23 +77,65 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    let mut result: Vec<&str> = Vec::new();
-    for line in contents.lines() {
-        if line.contains(query) {
-            result.push(line);
-        }
-    }
-    result
+use std::collections::HashMap;
+struct Cacher<T, U>
+where
+    T: Fn(&U) -> U,
+    U: std::cmp::Eq + std::hash::Hash,
+{
+    values: HashMap<U, U>,
+    calculation: T,
 }
 
-pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    let mut result: Vec<&str> = Vec::new();
-    let query = query.to_lowercase();
-    for line in contents.lines() {
-        if line.to_lowercase().contains(&query) {
-            result.push(line);
+impl<T, U> Cacher<T, U>
+where
+    T: Fn(&U) -> U,
+    U: std::cmp::Eq + std::hash::Hash + Copy,
+{
+    fn new(calculation: T) -> Cacher<T, U> {
+        Cacher {
+            calculation,
+            values: HashMap::new(),
         }
     }
-    result
+
+    fn value(&mut self, val: U) -> U {
+        match self.values.get(&val) {
+            None => {
+                let result = (self.calculation)(&val);
+                self.values.insert(val, result);
+                result
+            }
+            Some(v) => *v,
+        }
+    }
+}
+
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut cache_example = Cacher::new(|x| x + 1);
+    let res1 = cache_example.value(1);
+    let res2 = cache_example.value(1);
+    println!("{} {}", res1, res2);
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
+}
+
+/// Search 'query' in the content using case insensitive method
+///
+/// # Examples
+///
+/// ```
+/// let query = "hey";
+/// let contents = "my string\nwith hey\nHey";
+/// let result = minigrep::search_case_insensitive(&query, &contents);
+/// assert_eq!(vec!["with hey", "Hey"], result);
+/// ```
+pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    contents
+        .lines()
+        .filter(|line| line.to_lowercase().contains(&query))
+        .collect()
 }
